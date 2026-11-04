@@ -1,8 +1,6 @@
 " Colorscheme inspired on thor. Best dark theme ever.
 " Functions and code design inspired on nord-vim.
 
-let g:colors_name = "retrowave"
-
 set background=dark
 
 if version > 580
@@ -11,6 +9,8 @@ if version > 580
 		syntax reset
 	endif
 endif
+
+let g:colors_name = "retrowave"
 
 let s:black_hex		 = "#111111"
 let s:red_hex		 = "#F84672"

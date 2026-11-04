@@ -1,0 +1,25 @@
+" Retrowave colors shared with colors/retrowave.vim.
+let s:black = ['#111111', 234]
+let s:gray = ['#666666', 242]
+let s:white = ['#FBF1C7', 230]
+let s:pink = ['#F84672', 204]
+let s:teal = ['#00FCF8', 87]
+let s:purple = ['#FC71FF', 207]
+
+let s:palette = {'normal': {}, 'inactive': {}, 'insert': {}, 'replace': {}, 'visual': {}, 'tabline': {}}
+let s:palette.normal.left = [[s:black, s:pink, 'bold'], [s:white, s:gray]]
+let s:palette.normal.right = [[s:black, s:teal], [s:white, s:gray]]
+let s:palette.normal.middle = [[s:white, s:black]]
+let s:palette.normal.error = [[s:pink, s:black]]
+let s:palette.normal.warning = [[s:purple, s:black]]
+let s:palette.insert.left = [[s:black, s:teal, 'bold'], [s:white, s:gray]]
+let s:palette.replace.left = [[s:black, s:pink, 'bold'], [s:white, s:gray]]
+let s:palette.visual.left = [[s:black, s:purple, 'bold'], [s:white, s:gray]]
+let s:palette.inactive.left = [[s:gray, s:black]]
+let s:palette.inactive.right = [[s:gray, s:black]]
+let s:palette.inactive.middle = [[s:gray, s:black]]
+let s:palette.tabline.left = [[s:white, s:gray]]
+let s:palette.tabline.tabsel = [[s:black, s:teal, 'bold']]
+let s:palette.tabline.middle = [[s:white, s:black]]
+let s:palette.tabline.right = [[s:black, s:pink]]
+let g:lightline#colorscheme#retrowave#palette = lightline#colorscheme#flatten(s:palette)

@@ -27,23 +27,33 @@
 "
 " Definitely not Vim is a modern adaptation of [spf13/spf13-vim](https://github.com/spf13/spf13-vim).
 " Including XDG base directory, updated [plugins](plugins.vim) sources and the
-" best plugin manager out there: [Dein.vim](https://github.com/Shougo/dein.vim)
+" plugin management with [vim-plug](https://github.com/junegunn/vim-plug)
 " }
 
 " Environment {
 
 " XDG base directory specification support {
+if empty($XDG_CONFIG_HOME)
+    let $XDG_CONFIG_HOME = expand('~/.config')
+endif
+if empty($XDG_DATA_HOME)
+    let $XDG_DATA_HOME = expand('~/.local/share')
+endif
+if empty($XDG_CACHE_HOME)
+    let $XDG_CACHE_HOME = expand('~/.cache')
+endif
+let g:dnotvim_config_home = expand('<sfile>:p:h')
+" Include user plugins and Vim's system runtime without discarding either.
+execute 'set runtimepath^=' . escape(g:dnotvim_config_home, ' ,')
+execute 'set runtimepath+=' . escape(g:dnotvim_config_home . '/after', ' ,')
 let g:xdg_configs = {
     \ 'undo': $XDG_DATA_HOME . '/vim/undo',
     \ 'directory': $XDG_DATA_HOME . '/vim/swap',
     \ 'backup': $XDG_DATA_HOME . '/vim/backup',
     \ 'view': $XDG_CACHE_HOME . '/vim/view',
     \ 'info': $XDG_CACHE_HOME . '/vim/info',
-    \ 'after': $XDG_CONFIG_HOME . '/vim/after',
+    \ 'after': g:dnotvim_config_home . '/after',
     \ }
-
-set viminfo+='1000,n$XDG_CACHE_HOME/vim/info
-set runtimepath=$XDG_CONFIG_HOME/vim,$VIMRUNTIME,$XDG_CONFIG_HOME/vim/after
 
 if (has('win32') || has('win64')) " Windows bad
     set runtimepath+=$XDG_CONFIG_HOME/vim/vimfiles,$XDG_CONFIG_HOME/vim/vimfiles/after
@@ -58,14 +68,14 @@ endif
 " }
 
 " Use before config if available {
-if filereadable(expand($XDG_CONFIG_HOME . "/vim/before.vim"))
-    source $XDG_CONFIG_HOME/vim/before.vim
+if filereadable(g:dnotvim_config_home . '/before.vim')
+    execute 'source ' . fnameescape(g:dnotvim_config_home . '/before.vim')
 endif
 " }
 
 " Use plugins config {
-if filereadable(expand($XDG_CONFIG_HOME . "/vim/plugins.vim"))
-    source $XDG_CONFIG_HOME/vim/plugins.vim
+if filereadable(g:dnotvim_config_home . '/plugins.vim')
+    execute 'source ' . fnameescape(g:dnotvim_config_home . '/plugins.vim')
 endif
 " }
 
@@ -77,9 +87,13 @@ filetype plugin indent on " Automatically detect file types.
 
 syntax on " Syntax highlighting
 
-set term=xterm-256color " works around unknown TERM
 set termguicolors
-set clipboard=unnamedplus
+if has('mac') || has('macunix') || has('gui_macvim') ||
+            \ (has('unix') && substitute(system('uname -s'), '\n', '', 'g') ==# 'Darwin')
+    set clipboard=unnamed
+elseif has('unix') && substitute(system('uname -s'), '\n', '', 'g') ==# 'Linux'
+    set clipboard=unnamedplus
+endif
 
 scriptencoding utf-8
 set encoding=utf-8
@@ -91,13 +105,17 @@ colorscheme retrowave
 
 " let g:dnotvim_no_autochdir = 1
 if !exists('g:dnotvim_no_autochdir')
-    autocmd BufEnter * if bufname("") !~ "^\[A-Za-z0-9\]*://" | lcd %:p:h | endif
+    augroup dnotvim_directory
+        autocmd!
+        autocmd BufEnter * if &buftype ==# '' && !empty(expand('%:p')) && bufname('') !~# '^\w\+://'
+                    \ | execute 'lcd ' . fnameescape(expand('%:p:h')) | endif
+    augroup END
     " Always switch to the current file directory
 endif
 
 set autowrite                       " Automatically write a file when leaving a modified buffer
 set shortmess+=filmnrxoOtT          " Abbrev. of messages (avoids 'hit enter')
-set viewoptions=folds,options,cursor,unix,slash " Better Unix / Windows compatibility
+set viewoptions=folds,cursor,unix,slash " Restore views without overriding filetype/EditorConfig options
 set virtualedit=onemore             " Allow for cursor beyond last character
 set history=1000                    " Store a ton of history (default is 20)
 set hidden                          " Allow buffer switching without saving
@@ -140,9 +158,7 @@ endif
 if !exists('g:dnotvim_no_views')
     " Add exclusions to mkview and loadview
     " eg: *.*, svn-commit.tmp
-    let g:skipview_files = [
-                \ '\[example pattern\]'
-                \ ]
+    let g:skipview_files = get(g:, 'skipview_files', [])
 endif
 " }
 " }
@@ -211,11 +227,12 @@ set pastetoggle=<F12>           " pastetoggle (sane indentation on pastes)
 " .vimrc.before.local file:
 "   let g:dnotvim_keep_trailing_whitespace = 1
 
-autocmd FileType
- \ c,cpp,java,go,php,javascript,puppet,python,rust,twig,xml,yml,perl,sql
- \ autocmd BufWritePre <buffer> if !exists('g:dnotvim_keep_trailing_whitespace')
-   \ call StripTrailingWhitespace()
- \ endif
+augroup dnotvim_whitespace
+    autocmd!
+    autocmd FileType c,cpp,java,go,php,javascript,puppet,python,rust,twig,xml,yaml,perl,sql
+                \ autocmd! dnotvim_whitespace BufWritePre <buffer>
+                \ if !exists('g:dnotvim_keep_trailing_whitespace') | call StripTrailingWhitespace() | endif
+augroup END
 
 " following lines would better fit a plugin.
 autocmd BufEnter *.html.twig set filetype=html.twig
@@ -393,6 +410,23 @@ map <silent> <F11> :call system("wmctrl -ir " . v:windowid . " -b toggle,fullscr
 " }
 
 " Plugins {
+if count(g:dnotvim_plugin_groups, 'general') && !empty(globpath(&runtimepath, 'autoload/lexima.vim'))
+    " Initialize lazy mappings before restoring native Backspace behavior.
+    call lexima#init()
+    inoremap <BS> <BS>
+endif
+
+let g:ale_lint_on_text_changed = 'never'
+let g:ale_lint_on_insert_leave = 0
+if count(g:dnotvim_plugin_groups, 'haskell')
+    let g:ale_linters = extend(get(g:, 'ale_linters', {}), {'haskell': ['hls']}, 'keep')
+    autocmd FileType haskell setlocal omnifunc=ale#completion#OmniFunc
+endif
+if count(g:dnotvim_plugin_groups, 'neocomplete')
+    let g:mucomplete#enable_auto_at_startup = 1
+    set completeopt=menuone,noinsert,noselect
+endif
+
 
 " GoLang {
 if count(g:dnotvim_plugin_groups, 'go')
@@ -402,8 +436,7 @@ if count(g:dnotvim_plugin_groups, 'go')
     let g:go_highlight_operators = 1
     let g:go_highlight_build_constraints = 1
     let g:go_fmt_command = "goimports"
-    let g:syntastic_go_checkers = ['golint', 'govet', 'errcheck']
-    let g:syntastic_mode_map = { 'mode': 'active', 'passive_filetypes': ['go'] }
+    let g:ale_linters = extend(get(g:, 'ale_linters', {}), {'go': ['gopls']}, 'keep')
     au FileType go nmap <Leader>s <Plug>(go-implements)
     au FileType go nmap <Leader>i <Plug>(go-info)
     au FileType go nmap <Leader>e <Plug>(go-rename)
@@ -439,11 +472,7 @@ endif
 " }
 
 " Misc {
-if isdirectory(expand($XDG_CONFIG_HOME. "/vim/plugins/nerdtree"))
-    let g:NERDShutUp=1
-endif
-
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/matchit.zip"))
+if exists('g:loaded_matchit')
     let b:match_ignorecase = 1
 endif
 " }
@@ -475,35 +504,34 @@ if !exists('g:dnotvim_no_omni_complete')
 
     " Automatically open and close the popup menu / preview window
     au CursorMovedI,InsertLeave * if pumvisible() == 0|silent! pclose|endif
-    set completeopt=menu,preview,longest
+    if !count(g:dnotvim_plugin_groups, 'neocomplete')
+        set completeopt=menu,preview,longest
+    endif
 endif
 " }
 
 " AutoCloseTag {
 " Make it so AutoCloseTag works for xml and xhtml files as well
-au FileType xhtml,xml ru ftplugin/html/autoclosetag.vim
-nmap <Leader>ac <Plug>ToggleAutoCloseMappings
+if count(g:dnotvim_plugin_groups, 'html')
+    " Emmet supplies the existing tag completion/editing functionality.
+    nmap <Leader>ac <Plug>(emmet-update-tag)
+endif
 " }
 
-" NerdTree {
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/nerdtree"))
-    let NERDTreeShowBookmarks=1
-    let NERDTreeIgnore=['\.py[cd]$', '\~$', '\.swo$', '\.swp$', '^\.git$', '^\.hg$', '^\.svn$', '\.bzr$']
-    let NERDTreeChDirMode=0
-    let NERDTreeQuitOnOpen=1
-    let NERDTreeMouseMode=2
-    let NERDTreeShowHidden=1
-    let NERDTreeKeepTreeInNewTab=1
-    let g:nerdtree_tabs_open_on_gui_startup=0
-
-    map <C-e> <plug>NERDTreeTabsToggle<CR>
-    map <leader>e :NERDTreeFind<CR>
-    nmap <leader>nt :NERDTreeFind<CR>
+" Fern {
+if has_key(get(g:, 'plugs', {}), 'vim-fern')
+    let g:fern#default_hidden = 1
+    let g:fern#default_exclude = '\%(^\|/\)\%(\.git\|\.hg\|\.svn\|\.bzr\)$\|\.py[cd]$\|\~$\|\.sw[op]$'
+    let g:fern#disable_drawer_tabpage_isolation = 1
+    let g:fern#scheme#bookmark#store#file = $XDG_DATA_HOME . '/vim/fern-bookmarks.json'
+    nnoremap <silent> <C-e> :Fern . -drawer -toggle<CR>
+    nnoremap <silent> <leader>e :call DnotvimRevealFile()<CR>
+    nnoremap <silent> <leader>nt :call DnotvimRevealFile()<CR>
 endif
 " }
 
 " Tabularize {
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/tabular"))
+if has_key(get(g:, 'plugs', {}), 'tabular')
     nmap <Leader>a& :Tabularize /&<CR>
     vmap <Leader>a& :Tabularize /&<CR>
     nmap <Leader>a= :Tabularize /^[^=]*\zs=<CR>
@@ -525,70 +553,38 @@ endif
 
 " Session List {
 set sessionoptions=blank,buffers,curdir,folds,tabpages,winsize
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/sessionman.vim/"))
+if has_key(get(g:, 'plugs', {}), 'sessionman.vim')
     nmap <leader>sl :SessionList<CR>
     nmap <leader>ss :SessionSave<CR>
     nmap <leader>sc :SessionClose<CR>
 endif
 " }
 
-" ctrlp {
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/ctrlp.vim/"))
-    let g:ctrlp_working_path_mode = 'ra'
-    nnoremap <silent> <D-t> :CtrlP<CR>
-    nnoremap <silent> <D-r> :CtrlPMRU<CR>
-    let g:ctrlp_custom_ignore = {
-                \ 'dir':  '\.git$\|\.hg$\|\.svn$',
-                \ 'file': '\.exe$\|\.so$\|\.dll$\|\.pyc$' }
-
-    if executable('ag')
-        let s:ctrlp_fallback = 'ag %s --nocolor -l -g ""'
-    elseif executable('ack-grep')
-        let s:ctrlp_fallback = 'ack-grep %s --nocolor -f'
-    elseif executable('ack')
-        let s:ctrlp_fallback = 'ack %s --nocolor -f'
-        " On Windows use "dir" as fallback command.
-    elseif executable('rg') " Preferable
-        let s:ctrlp_fallback= 'rg %s --color never'
-    elseif WINDOWS()
-        let s:ctrlp_fallback = 'dir %s /-n /b /s /a-d'
-    else
-        let s:ctrlp_fallback = 'find %s -type f'
+" fzf {
+if has_key(get(g:, 'plugs', {}), 'fzf.vim')
+    if executable('rg') && empty($FZF_DEFAULT_COMMAND)
+        let $FZF_DEFAULT_COMMAND = 'rg --files --hidden -g !.git'
     endif
-    if exists("g:ctrlp_user_command")
-        unlet g:ctrlp_user_command
-    endif
-    let g:ctrlp_user_command = {
-                \ 'types': {
-                \ 1: ['.git', 'cd %s && git ls-files . --cached --exclude-standard --others'],
-                \ 2: ['.hg', 'hg --cwd %s locate -I .'],
-                \ },
-                \ 'fallback': s:ctrlp_fallback
-                \ }
-
-    if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/ctrlp-funky/"))
-        " CtrlP extensions
-        let g:ctrlp_extensions = ['funky']
-
-        "funky
-        nnoremap <Leader>fu :CtrlPFunky<Cr>
-    endif
+    nnoremap <silent> <C-p> :call DnotvimFindFiles()<CR>
+    nnoremap <silent> <D-t> :call DnotvimFindFiles()<CR>
+    nnoremap <silent> <D-r> :History<CR>
+    nnoremap <silent> <leader>fu :BTags<CR>
 endif
-"}
+" }
 
 " Rainbow demiliters {
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/rainbow/"))
+if has_key(get(g:, 'plugs', {}), 'rainbow')
     let g:rainbow_active = 1
 endif
 "}
 
 " Fugitive (Git) {
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/vim-fugitive/"))
-    nnoremap <silent> <leader>gs :Gstatus<CR>
-    nnoremap <silent> <leader>gd :Gdiff<CR>
-    nnoremap <silent> <leader>gc :Gcommit<CR>
-    nnoremap <silent> <leader>gb :Gblame<CR>
-    nnoremap <silent> <leader>gl :Glog<CR>
+if has_key(get(g:, 'plugs', {}), 'vim-fugitive')
+    nnoremap <silent> <leader>gs :Git<CR>
+    nnoremap <silent> <leader>gd :Gdiffsplit<CR>
+    nnoremap <silent> <leader>gc :Git commit<CR>
+    nnoremap <silent> <leader>gb :Git blame<CR>
+    nnoremap <silent> <leader>gl :Gclog<CR>
     nnoremap <silent> <leader>gp :Git push<CR>
     nnoremap <silent> <leader>gr :Gread<CR>
     nnoremap <silent> <leader>gw :Gwrite<CR>
@@ -615,21 +611,25 @@ if count(g:dnotvim_plugin_groups, 'youcompleteme')
     autocmd FileType python setlocal omnifunc=pythoncomplete#Complete
     autocmd FileType xml setlocal omnifunc=xmlcomplete#CompleteTags
     autocmd FileType ruby setlocal omnifunc=rubycomplete#Complete
-    autocmd FileType haskell setlocal omnifunc=necoghc#omnifunc
 
     set completeopt-=preview
 endif
 " }
 
-if isdirectory(expand($XDG_CONFIG_HOME . "/vim/plugins/vim-airline-themes/"))
-    if !exists('g:airline_theme')
-        let g:airline_theme = 'monochrome'
-    endif
-
-    if !exists('g:airline_powerline_fonts')
-        let g:airline_left_sep='>'
-        let g:airline_right_sep='<'
-    endif
+" Lightline {
+if has_key(get(g:, 'plugs', {}), 'lightline.vim')
+    let g:lightline = extend({
+                \ 'colorscheme': 'retrowave',
+                \ 'active': {
+                \     'left': [['mode', 'paste'], ['branch', 'readonly', 'filename', 'modified']],
+                \     'right': [['lineinfo'], ['percent'], ['diagnostics', 'fileformat', 'fileencoding', 'filetype']],
+                \ },
+                \ 'component_function': {'branch': 'DnotvimGitBranch', 'diagnostics': 'DnotvimDiagnostics'},
+                \ 'tabline': {'left': [['buffers']], 'right': [['tabs']]},
+                \ 'component_expand': {'buffers': 'DnotvimBufferNames'},
+                \ 'component_type': {'buffers': 'tabsel'},
+                \ }, get(g:, 'lightline', {}), 'force')
+    set showtabline=2
 endif
 " }
 
@@ -637,52 +637,101 @@ endif
 
 " Initialize directories {
 function! InitializeXDGDirectories()
-    let directories = [
-        \ g:xdg_configs.directory,
-        \ g:xdg_configs.backup,
-        \ g:xdg_configs.view,
-        \ g:xdg_configs.after,
-        \ ]
-
-    if has('persistent_undo')
-        call add(directories, g:xdg_configs.undo)
-    endif
-
-    for dirname in directories
-        if exists("*mkdir")
-            if !isdirectory(dirname)
-                call mkdir(dirname, 'p')
-            endif
-        endif
-
+    for dirname in [g:xdg_configs.directory, g:xdg_configs.backup,
+                \ g:xdg_configs.view, fnamemodify(g:xdg_configs.info, ':h'), g:xdg_configs.undo]
         if !isdirectory(dirname)
-            echo "Warning: Unable to create directory: " . dirname
+            call mkdir(dirname, 'p', 0700)
         endif
-
-    exec "set undodir =" . g:xdg_configs.undo
-    exec "set directory =" . g:xdg_configs.directory
-    exec "set backupdir =" . g:xdg_configs.backup
-    exec "set viewdir =" . g:xdg_configs.view
-    exec "set viminfo+='1000,n" . g:xdg_configs.info
-    exec "set runtimepath+=" . $XDG_CONFIG_HOME . "/vim," . $VIMRUNTIME . "," . g:xdg_configs.after
     endfor
+    let &undodir = g:xdg_configs.undo . '//'
+    let &directory = g:xdg_configs.directory . '//'
+    let &backupdir = g:xdg_configs.backup . '//'
+    let &viewdir = g:xdg_configs.view
+    let &viminfo = "'1000,n" . g:xdg_configs.info
 endfunction
 call InitializeXDGDirectories()
 " }
 
-" Initialize NERDTree as needed {
-function! NERDTreeInitAsNeeded()
-    redir => bufoutput
-    buffers!
-    redir END
-    let idx = stridx(bufoutput, "NERD_tree")
-    if idx > -1
-        NERDTreeMirror
-        NERDTreeFind
-        wincmd l
+" File navigation and statusline helpers {
+function! DnotvimProjectRoot()
+    let directory = getcwd()
+    while 1
+        for marker in ['.git', '.hg', '.svn', '.bzr']
+            if isdirectory(directory . '/' . marker) || filereadable(directory . '/' . marker)
+                return directory
+            endif
+        endfor
+        let parent = fnamemodify(directory, ':h')
+        if parent ==# directory
+            return getcwd()
+        endif
+        let directory = parent
+    endwhile
+endfunction
+
+function! DnotvimFindFiles()
+    execute 'Files ' . fnameescape(DnotvimProjectRoot())
+endfunction
+
+function! DnotvimRevealFile()
+    let current_file = expand('%:p')
+    execute 'Fern . -drawer' . (empty(current_file) || &buftype !=# ''
+                \ ? '' : ' -reveal=' . fnameescape(current_file))
+endfunction
+
+function! DnotvimGitBranch()
+    return exists('*FugitiveHead') ? FugitiveHead() : ''
+endfunction
+
+function! DnotvimDiagnostics()
+    if !exists('*ale#statusline#Count')
+        return ''
     endif
+    let counts = ale#statusline#Count(bufnr(''))
+    return counts.total ? printf('E:%d W:%d', counts.error + counts.style_error,
+                \ counts.warning + counts.style_warning) : ''
+endfunction
+
+function! DnotvimBufferNames()
+    let names = [[], [], []]
+    let section = 0
+    for buffer in getbufinfo({'buflisted': 1})
+        if buffer.name =~# '^fern://'
+            continue
+        endif
+        let current = buffer.bufnr == bufnr('')
+        let name = empty(buffer.name) ? '[No Name]' : fnamemodify(buffer.name, ':t')
+        call add(names[current ? 1 : section], printf('%d:%s%s', buffer.bufnr, name, buffer.changed ? '+' : ''))
+        if current
+            let section = 2
+        endif
+    endfor
+    return names
 endfunction
 " }
+
+" Views use Vim's built-in persistence rather than a wrapper plugin.
+function! DnotvimCanSaveView()
+    if exists('g:dnotvim_no_views') || &buftype !=# '' || &diff || !&modifiable || !filereadable(expand('%:p'))
+        return 0
+    endif
+    if expand('%') =~# '\[.*\]' || (!empty($TEMP) && expand('%:p:h') ==# $TEMP)
+                \ || (!empty($TMP) && expand('%:p:h') ==# $TMP)
+        return 0
+    endif
+    for pattern in get(g:, 'skipview_files', [])
+        if expand('%:p') =~# pattern
+            return 0
+        endif
+    endfor
+    return 1
+endfunction
+
+augroup dnotvim_views
+    autocmd!
+    autocmd BufWritePre,BufWinLeave ?* if DnotvimCanSaveView() | silent! mkview | endif
+    autocmd BufWinEnter ?* if DnotvimCanSaveView() | silent! loadview | endif
+augroup END
 
 " Strip whitespace {
 function! StripTrailingWhitespace()

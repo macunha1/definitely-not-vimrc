@@ -30,42 +30,40 @@ important CLEAN `$HOME`. "Tidy $HOME, Tidy Mind"
 
 Definitely not Vim is a modern adaptation of [spf13/spf13-vim](https://github.com/spf13/spf13-vim).
 Including XDG base directory, updated [plugins](plugins.vim) sources and the
-best plugin manager out there: [Dein.vim](https://github.com/Shougo/dein.vim)
+plugin management with [vim-plug](https://github.com/junegunn/vim-plug).
 
 ## Installation
 
 Clone this repository to your XDG base configuration home
 
 ```bash
-git clone https://github.com/macunha1/definitely-not-vim \
-    ${XDG_CONFIG_HOME}/vim
+git clone https://github.com/macunha1/definitely-not-vimrc \
+    "${XDG_CONFIG_HOME:-$HOME/.config}/vim"
 ```
 
-TL;DR instructions from [Dein.vim's README](https://github.com/Shougo/dein.vim#quick-start).
+Install [vim-plug](https://github.com/junegunn/vim-plug#installation) (Vim 8.2+ and Git required).
 
 ```bash
-git clone https://github.com/Shougo/dein.vim \
-    ${XDG_CONFIG_HOME}/vim/plugins/dein.vim
+curl -fLo "${XDG_CONFIG_HOME:-$HOME/.config}/vim/autoload/plug.vim" --create-dirs \
+    https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
 ```
 
 Edit mainly the [before file](before.vim) with your customization, you can pick
 some premade "plugin groups" with generic configurations (e.g. programming
 languages or "infra" tools). More info at [plugins](plugins.vim).
 
-Once you finish your tweaks with the configuration files, open `vim` anywhere
-to load the initial setup (create folders, downloads plugins and load stuff).
-Additionally, `Dein.vim` will inspect changes in plugins list and install the
-delta every time `vim` starts.
-
 Lastly, let `vim` know where you're hiding the configuration changing `VIMINIT`
 environment variable value to
 
 ``` bash
-export VIMINIT="source ${XDG_CONFIG_HOME}/vim/init.vim" # or anywhere else
+export VIMINIT='source $HOME/.config/vim/init.vim' # adjust for a custom XDG_CONFIG_HOME
 ```
 
 Make sure you persist this environment variable in your profile (e.g.
 `.bash_profile`, `.zprofile`) to automatically load for future sessions
+
+Clipboard defaults to `unnamed` on Darwin and `unnamedplus` on Linux (requires
+a Vim build with clipboard support and an available OS clipboard).
 
 ## License
 

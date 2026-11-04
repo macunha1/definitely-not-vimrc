@@ -3,8 +3,10 @@
 
 let g:dnotvim_plugin_groups = ['general', 'programming', 'infra', 'misc']
 
-let g:vim_json_syntax_concealcursor = ''
-let g:vim_json_syntax_conceal = 0
+let g:vim_json_conceal = 0
+
+" Complete brackets without inserting paired spaces.
+let g:lexima_enable_space_rules = 0
 
 let g:neoformat_enabled_python = ['autopep8', 'yapf']
 let g:neoformat_enabled_ruby = ['rubocop']
@@ -13,13 +15,7 @@ let g:terraform_align = 0
 let g:terraform_fmt_on_save = 1
 
 " Theme and visual configurations {
-"" Airline unicode symbols
-let g:airline_powerline_fonts = 1
-let g:airline_theme = 'monochrome'
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#formatter = 'default'
-
-let g:Powerline_symbols = 'fancy'
+let g:lightline = { 'colorscheme': 'retrowave' }
 
 let g:rainbow_active = 1
 let g:retrowave_default_termcolors = 1
